@@ -1,0 +1,224 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+
+// static const float speed_of_light = 299792458f;
+// static const float G = 0.000000000066743f;
+static const float c = 1.0f;
+static const float G = 1.0f;
+
+float dt;
+float change_size;
+float cloud_density;
+float radius;
+float mass;
+
+float3 disk_normal;
+int num_steps;
+float3 _CamPlane;
+float4x4 _CamToWorldMatrix;
+
+struct Ray {
+    float3 dir;
+    float3 pos;
+
+    float r;
+    float phi;
+    float theta;
+
+    float dr;
+    float dphi;
+    float dtheta;
+
+    float E, L;             // conserved quantities
+};
+
+struct GeodesicUpdate {
+    float dr;
+    float dtheta;
+    float dphi;
+
+    float dr_dr;
+    float dtheta_dtheta;
+    float dphi_dphi;
+};
+
+void  calculatePolar(inout Ray ray) 
+{
+    ray.r = sqrt(ray.pos.x * ray.pos.x + ray.pos.y * ray.pos.y + ray.pos.z*ray.pos.z);
+    ray.theta = acos(ray.pos.z / ray.r); 
+    ray.phi = atan2(ray.pos.y, ray.pos.x);
+
+    float dx = ray.dir.x; 
+    float dy = ray.dir.y; 
+    float dz = ray.dir.z;
+
+    ray.dr     = sin(ray.theta)*cos(ray.phi)*dx + sin(ray.theta)*sin(ray.phi)*dy + cos(ray.theta)*dz;
+    ray.dtheta = cos(ray.theta)*cos(ray.phi)*dx + cos(ray.theta)*sin(ray.phi)*dy - sin(ray.theta)*dz;
+    ray.dtheta /= ray.r;
+    ray.dphi   = -sin(ray.phi)*dx + cos(ray.phi)*dy;
+    ray.dphi  /= (ray.r * sin(ray.theta));
+
+    // Calculate angular momentum and energy
+    ray.L = ray.r * ray.r * sin(ray.theta) * ray.dphi;
+    float f = 1.0f - radius / ray.r;
+    float dt_dlambda = sqrt((ray.dr*ray.dr)/f 
+                + ray.r * ray.r * ray.dtheta * ray.dtheta 
+                + ray.r * ray.r * sin(ray.theta) * sin(ray.theta) * ray.dphi * ray.dphi);
+    ray.E = f * dt_dlambda;
+}
+
+float3 calculateCartesian(float r, float theta, float phi) {
+    return float3(r * sin(theta) *cos(phi), r * sin(theta) * sin(phi), r * cos(theta));
+}
+
+GeodesicUpdate geodesic(Ray ray) {
+
+    float f = 1.0f - radius / ray.r;
+    float dt_dlambda = ray.E / f;
+
+    GeodesicUpdate geodesic_update;
+
+    geodesic_update.dr = ray.dr;
+    geodesic_update.dtheta = ray.dtheta;
+    geodesic_update.dphi = ray.dphi;
+
+    // Second derivatives (from 3D Schwarzschild null geodesics):
+    geodesic_update.dr_dr = 
+        - (radius / (2 * ray.r * ray.r)) * f * dt_dlambda * dt_dlambda
+        + (radius / (2 * ray.r * ray.r * f)) * ray.dr * ray.dr
+        + ray.r * f * (ray.dtheta * ray.dtheta + sin(ray.theta) * sin(ray.theta) * ray.dphi * ray.dphi);
+
+    geodesic_update.dtheta_dtheta = 
+        - (2.0 / ray.r) * ray.dr * ray.dtheta
+        + sin(ray.theta) * cos(ray.theta) * ray.dphi * ray.dphi;
+
+    geodesic_update.dphi_dphi = 
+        - (2.0 / ray.r) * ray.dr * ray.dphi
+        - 2.0 * cos(ray.theta) / sin(ray.theta) * ray.dtheta * ray.dphi;
+
+    return geodesic_update;
+}
+
+Ray update_state(Ray ray, GeodesicUpdate g, float multiplyer) {
+
+    Ray new_ray;
+    new_ray.pos = ray.pos;
+    new_ray.dir = ray.dir;
+    new_ray.E = ray.E;
+    new_ray.L = ray.L;  
+
+    new_ray.r = ray.r + g.dr *multiplyer;
+    new_ray.phi = ray.phi + g.dphi *multiplyer;
+    new_ray.theta = ray.theta + g.dtheta *multiplyer;
+
+    new_ray.dr = ray.dr + g.dr_dr *multiplyer;
+    new_ray.dphi = ray.dphi + g.dphi_dphi *multiplyer;
+    new_ray.dtheta = ray.dtheta + g.dtheta_dtheta *multiplyer;
+
+    return new_ray;
+}
+
+void rk4(inout Ray ray, float dlambda){
+
+    GeodesicUpdate k1 = geodesic(ray);
+    Ray ray_2 = update_state(ray, k1, dlambda / 2.0f);
+    
+    GeodesicUpdate k2 = geodesic(ray_2);
+    Ray ray_3 = update_state(ray, k2, dlambda / 2.0f);
+
+    GeodesicUpdate k3 = geodesic(ray_3);
+    Ray ray_4 = update_state(ray, k3, dlambda / 2.0f);
+
+    GeodesicUpdate k4 = geodesic(ray_4);
+
+    ray.r += (dlambda/6.0f)*(k1.dr + 2*k2.dr + 2*k3.dr + k4.dr);
+    ray.phi += (dlambda/6.0f)*(k1.dphi + 2*k2.dphi + 2*k3.dphi + k4.dphi);
+    ray.theta += (dlambda/6.0f)*(k1.dtheta + 2*k2.dtheta + 2*k3.dtheta + k4.dtheta);
+
+    ray.dr += (dlambda/6.0f)*(k1.dr_dr + 2*k2.dr_dr + 2*k3.dr_dr + k4.dr_dr);
+    ray.dphi += (dlambda/6.0f)*(k1.dphi_dphi + 2*k2.dphi_dphi + 2*k3.dphi_dphi + k4.dphi_dphi);
+    ray.dtheta += (dlambda/6.0f)*(k1.dtheta_dtheta + 2*k2.dtheta_dtheta + 2*k3.dtheta_dtheta + k4.dtheta_dtheta);
+}
+
+float signed_distance_black_hole(float3 pos){
+
+    return sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z) - radius;
+
+}
+
+float signed_distance_field_sphere(float3 pos){
+    return length(pos - float3(0,0,20.0)) - 8.0f;
+}
+
+float signed_distance_cloud(float3 pos){
+
+    // float3 d = dot(pos, disk_normal) * disk_normal;
+    // float3 o = pos - d;
+    // o -= normalize( o ) * min( length( o ), 3*radius );
+    // return length( d + o );
+
+    float2 q = float2(length(pos.xz)- 3*radius, pos.y);
+    return length(q)-0.5f;
+}
+
+
+
+float3 Trace(Ray ray){
+
+    float3 colour = (0.0f,0.0f,0.0f);
+
+    float dlambda = change_size;
+
+    for(int i = 0; i < num_steps; i++){
+
+        rk4(ray,dlambda);
+
+        float3 pos = calculateCartesian(ray.r, ray.theta, ray.phi);
+
+        if (signed_distance_black_hole(pos) < 0){
+            float col = lerp(1, 0, (float)i / (float)num_steps);
+            return float3(col, col, col);
+        }
+        if (signed_distance_cloud(pos) < 0){
+            return float3(1,0,0);
+        } 
+        if (signed_distance_field_sphere(pos) < 0){
+            return float3(0,1,0);
+        }
+
+        
+
+
+    }
+    return float3(0,0,0);
+}
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    uint width,height;
+    Result.GetDimensions(width, height);
+
+    float2 uv = id.xy / float2(width,height);
+
+    // Ray marching
+    Ray ray;
+    float3 totalIncomingLight = 0;
+
+    float3 focusPointLocal = float3((uv - 0.5), 1) * _CamPlane;
+    float3 focusPoint = mul(_CamToWorldMatrix, float4(focusPointLocal, 1));
+    float3 camRight = _CamToWorldMatrix._m00_m10_m20;
+    float3 camUp = _CamToWorldMatrix._m01_m11_m21;
+
+
+    ray.pos = mul(_CamToWorldMatrix, float4(0,0,0,1)).xyz;
+    ray.dir = normalize(focusPoint - ray.pos);
+    calculatePolar(ray);
+
+    float3 pixelCol = Trace(ray);
+    Result[id.xy] = float4(pixelCol, 1);
+}

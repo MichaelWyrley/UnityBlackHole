@@ -1,0 +1,179 @@
+// ALL modified from https://blog.maximeheckel.com/posts/real-time-cloudscapes-with-volumetric-raymarching/
+
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+sampler2D  BlueNoise;
+// RWStructuredBuffer<float2> gradients;
+
+
+int num_steps;
+float3 _CamPlane;
+float4x4 _CamToWorldMatrix;
+float time;
+float light_intensity;
+
+float cloud_density;
+float3 light_loc;
+float step_size;
+float interpolation_factor;
+
+float exp_factor;
+int shadow_steps;
+float noise_factor;
+
+float4 colour_max;
+float4 colour_min;
+
+struct Ray {
+    float3 dir;
+    float3 pos;
+};
+
+
+// noise
+// Volume raycasting by XT95
+// https://www.shadertoy.com/view/lss3zr
+
+// Taken from cloud demo: https://www.shadertoy.com/view/WdXGRj
+float3x3 m = float3x3( 0.00,  0.80,  0.60,
+              -0.80,  0.36, -0.48,
+              -0.60, -0.48,  0.64 );
+float hash( float n )
+{
+    return frac(sin(n)*43758.5453);
+}
+
+float noise(  float3 x )
+{
+    float3 p = floor(x);
+    float3 f = frac(x);
+
+    f = f*f*(3.0-2.0*f);
+
+    float n = p.x + p.y*57.0 + 113.0*p.z;
+
+    float res = lerp(lerp(lerp( hash(n+  0.0), hash(n+  1.0),f.x),
+                        lerp( hash(n+ 57.0), hash(n+ 58.0),f.x),f.y),
+                    lerp(lerp( hash(n+113.0), hash(n+114.0),f.x),
+                        lerp( hash(n+170.0), hash(n+171.0),f.x),f.y),f.z);
+    return res;
+}
+
+/////////////////////////////////////
+
+// Taken from FBM https://blog.maximeheckel.com/posts/real-time-cloudscapes-with-volumetric-raymarching/
+float fbm( float3 p )
+{
+    float3 q = p + time * 0.5 * float3(1.0, -0.2, -1.0);
+    float g = noise(q);
+
+    float f = 0.0;
+    float scale = 0.5;
+    float factor = 2.02;
+
+    for (int i = 0; i < 6; i++) {
+        f += scale * noise(q);
+        q *= factor;
+        factor += 0.21;
+        scale *= 0.5;
+    }
+
+    return f;
+}
+
+
+
+float3 exponential_interpolation(float3 col_min, float3 col_max, float value){
+
+    value = saturate(value);
+    float denom = max(1.0 - exp(-interpolation_factor), 1e-6);
+    float factor = (1.0 - exp(-interpolation_factor * value)) / (denom);  
+
+    return lerp(col_min, col_max, factor);
+
+}
+
+
+float signed_distance_field_sphere(float3 pos){
+    return length(pos - float3(0,0,0)) - 5.0f;
+}
+
+float scene(float3 pos){
+    float distance = signed_distance_field_sphere(pos);
+    float f = fbm(pos);
+
+    return -distance + f;
+}
+
+
+float4 Trace(Ray ray, float offset){
+
+    float4 res = float4(0.0f,0.0f,0.0f, 0.0f);
+    float transmittance = 1;
+
+    float depth = 0.0f;
+
+
+    for(int i = 0; i < num_steps; i++){
+
+
+        float3 pos = ray.pos + depth * ray.dir ;
+        float density = scene(pos);
+
+        
+
+        if (density > 0.0f){
+            float diffuse = clamp((scene(pos+0.001f*light_loc)-density)/0.001f,0.0,1.0);
+
+            float3 lin = float3(0.60,0.60,0.75) * 1.1 + 0.8 * float3(1.0,0.6,0.3) * diffuse;
+            float4 color = float4(exponential_interpolation(colour_min.rgb, colour_max.rgb, density), density );
+            color.rgb *= lin;
+
+            color.rgb *= color.a;
+            res += color * (1.0 - res.a);
+
+            if (res.a < 0.0001 || res.a > 0.9999){
+                break;
+            }
+        }
+
+
+        depth += step_size * offset;
+
+    }
+    return res;
+}
+
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    uint width,height;
+    Result.GetDimensions(width, height);
+
+    float2 uv = id.xy / float2(width,height);
+
+    float2 noiseUV = frac(id.xy / 1024.0); 
+    float blueNoise = tex2Dlod(BlueNoise, float4(noiseUV, 0, 0)).r ;
+    float offset = frac(blueNoise );
+
+
+    // Ray marching
+    Ray ray;
+    float3 totalIncomingLight = 0;
+
+    float3 focusPointLocal = float3((uv - 0.5), 1) * _CamPlane;
+    float3 focusPoint = mul(_CamToWorldMatrix, float4(focusPointLocal, 1));
+    float3 camRight = _CamToWorldMatrix._m00_m10_m20;
+    float3 camUp = _CamToWorldMatrix._m01_m11_m21;
+
+
+    ray.pos = mul(_CamToWorldMatrix, float4(0,0,0,1)).xyz;
+    ray.dir = normalize(focusPoint - ray.pos);
+
+    Result[id.xy] = Trace(ray, offset);
+}
