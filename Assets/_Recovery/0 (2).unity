@@ -270,18 +270,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RayMarchHelper
   mass: 2
-  ring_size: {x: 3, y: 10}
+  ring_size: 0
   num_steps: 1000
   change_size: 0.1
   disk_normal: {x: 0, y: 1, z: 0}
   shader: {fileID: 7200000, guid: 0b7d43c7b24c5e548beb5561aa3ed2e7, type: 3}
   accumulateShader: {fileID: 4800000, guid: 17da9b98ea8e8f643bbd102d806d825f, type: 3}
   light_loc: {x: 0, y: 0, z: 0}
-  fog_step_size: 100
-  interpolation_factor: 10
-  colour_max: {r: 0, g: 0.16482663, b: 1, a: 0}
-  colour_min: {r: 1, g: 0, b: 0, a: 0}
-  blueNoise: {fileID: 2800000, guid: 228ff113a74ce1049ad7a6e9bba484b4, type: 3}
+  step_size: 0
+  interpolation_factor: 0
+  colour_max: {r: 0, g: 0, b: 0, a: 0}
+  colour_min: {r: 0, g: 0, b: 0, a: 0}
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
@@ -445,7 +444,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 41, y: 19}
+  m_AnchoredPosition: {x: 39.6, y: 18.6}
   m_SizeDelta: {x: 55.599976, y: 17.100006}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &538251008

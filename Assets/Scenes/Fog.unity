@@ -224,15 +224,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4afdc2586bb7ccc4eb557f8776a54aed, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Fog
-  density: 0.784
-  step_size: 0.01
-  num_steps: 1161
+  density: 0.75
+  step_size: 0.3
+  num_steps: 100
   shadow_steps: 1
   light_intensity: 0.04
   exp_factor: 5.23
   noise_factor: 5.96
   light_loc: {x: 0, y: 0, z: 0}
   shader: {fileID: 7200000, guid: 26a1713d5494b1144b2f9628cb29c7af, type: 3}
+  interpolation_factor: 10
+  colour_max: {r: 1, g: 1, b: 1, a: 0}
+  colour_min: {r: 0, g: 0, b: 0, a: 0}
+  blueNoise: {fileID: 2800000, guid: 228ff113a74ce1049ad7a6e9bba484b4, type: 3}
 --- !u!1 &1221471686
 GameObject:
   m_ObjectHideFlags: 0

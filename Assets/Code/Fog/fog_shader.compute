@@ -127,7 +127,7 @@ float4 Trace(Ray ray, float offset){
         
 
         if (density > 0.0f){
-            float diffuse = clamp((scene(pos+0.001f*light_loc)-density)/0.001f,0.0,1.0);
+            float diffuse = clamp((scene(pos+0.001f*light_loc)-density)/0.001f,0.0,1.0) ;
 
             float3 lin = float3(0.60,0.60,0.75) * 1.1 + 0.8 * float3(1.0,0.6,0.3) * diffuse;
             float4 color = float4(exponential_interpolation(colour_min.rgb, colour_max.rgb, density), density );
