@@ -5,34 +5,50 @@ using static UnityEngine.Mathf;
 [ExecuteAlways]
 public class RayMarchHelper : MonoBehaviour
 {
-
+    [Header("Black Hole Settings")]
     public float mass;
     public Vector2 ring_size;
+    // public Vector3 disk_normal;
+    // public const float speed_of_light = 299792458f;
+    // public const float G = 0.000000000066743f;
+    public float speed_of_light = 1.0f;
+    public float G = 1.0f;
+
+    [Header("Ray March Settings")]
     public int num_steps;
     public float change_size;
-    public Vector3 disk_normal;
-    RenderTexture outputTexture;
+
+    [Header("Shader")]
     public ComputeShader shader;
     [SerializeField] Shader accumulateShader;
+    public Texture2D blueNoise;
 
-    Material accumulateMaterial;
-    RenderTexture accumulateTexture;
 
     // Cloud
 
+    [Header("Cloud Settings")]
+    public int fog_no_steps;
+    [Range(0,1)]
+    public float cloud_density;
+    
+
+    [Header("Cloud Lighting Settings")]
     public Vector3 light_loc;
-    public int fog_step_size;
-    public float interpolation_factor;
+    public int light_step;
+    public float light_step_size;
+    [Range(0, 1)]
+    public float anisotropic_scatter_factor;
+    
+    [Header("Cloud Colour")]
     public Color colour_max;
     public Color colour_min;
-    public Texture2D blueNoise;
+    public float interpolation_factor;
 
     Camera cam;
+    RenderTexture outputTexture;
+    Material accumulateMaterial;
+    RenderTexture accumulateTexture;
 
-    // public const float speed_of_light = 299792458f;
-    // public const float G = 0.000000000066743f;
-    public const float speed_of_light = 1.0f;
-    public const float G = 1.0f;
 
     int kernel;
     float frame = 0.0f;
@@ -159,18 +175,27 @@ public class RayMarchHelper : MonoBehaviour
 
         var r = (2 * G * mass) / (speed_of_light * speed_of_light);
         
-        shader.SetFloat("change_size", change_size);
         shader.SetFloat("radius", r);
         shader.SetFloat("mass", mass);
-        shader.SetVector("ring_size",ring_size);
-        shader.SetInt("num_steps", num_steps);
-        shader.SetVector("disk_normal", Vector3.Normalize(disk_normal));
 
-        shader.SetVector("light_loc",light_loc);
-        shader.SetInt("fog_step_size",fog_step_size);
-        shader.SetFloat("interpolation_factor",interpolation_factor);
+        shader.SetInt("num_steps", num_steps);
+        shader.SetFloat("change_size", change_size);
+
+        // Cloud
+        shader.SetVector("ring_size",ring_size);
+        // shader.SetVector("disk_normal", Vector3.Normalize(disk_normal));
+
+        shader.SetInt("fog_no_steps",fog_no_steps);
+        shader.SetFloat("cloud_density", cloud_density);
+
+        shader.SetVector("light_loc", light_loc);
+        shader.SetFloat("max_light_step", light_step);
+        shader.SetFloat("light_step_size", light_step_size);
+        shader.SetFloat("anisotropic_scatter_factor",anisotropic_scatter_factor);
+        
         shader.SetVector("colour_max", colour_max);
         shader.SetVector("colour_min", colour_min);
+        shader.SetFloat("interpolation_factor",interpolation_factor);
 
     }
 

@@ -11,23 +11,28 @@ sampler2D  BlueNoise;
 static const float c = 1.0f;
 static const float G = 1.0f;
 
-float dt;
-float time;
-float change_size;
-float cloud_density;
-float radius;
-float mass;
-float2 ring_size;
-
-float3 disk_normal;
-int num_steps;
 float3 _CamPlane;
 float4x4 _CamToWorldMatrix;
 
+float radius;
+float mass;
+
+float change_size;
+int num_steps;
+float time;
+
+
 // Cloud
+int fog_no_steps;
+float cloud_density;
+// float3 disk_normal;
+float2 ring_size;
 
 float3 light_loc;
-int fog_step_size;
+float max_light_step;
+float light_step_size;
+float anisotropic_scatter_factor;
+
 float interpolation_factor;
 float4 colour_max;
 float4 colour_min;
@@ -221,6 +226,15 @@ float fbm( float3 p )
     return f;
 }
 
+// Light phase function to model Anisotropic 
+float HenyeyGreenstein(float g, float mu) {
+  float gg = g * g;
+	return (1.0 / (4.0 * 3.14))  * ((1.0 - gg) / pow(1.0 + gg - 2.0 * g * mu, 1.5));
+}
+
+float BeersLaw (float dist, float absorption) {
+  return exp(-dist * absorption);
+}
 
 
 float3 exponential_interpolation(float3 col_min, float3 col_max, float value){
@@ -235,14 +249,8 @@ float3 exponential_interpolation(float3 col_min, float3 col_max, float value){
 
 float signed_distance_cloud(float3 pos){
 
-    float inner_size = ring_size.x * radius;
-    float outer_size = ring_size.y * radius;
-    float plane = dot(pos,disk_normal) + 0.01f;
-
-    float inner_disk = max(plane, -(length(pos)-inner_size));
-    float outer_dist = max(inner_disk, length(pos)- outer_size);
-
-    return outer_dist;
+    float2 d = abs(float2(length(pos.xz),pos.y)) - ring_size;
+    return min(max(d.x,d.y),0.0) + length(max(d,0.0));
 }
 
 float cloud_scene(float3 pos){
@@ -250,6 +258,25 @@ float cloud_scene(float3 pos){
     float f = fbm(pos);
 
     return -distance + f;
+}
+
+// Ray march from cloud to light source
+float lightmarch(float3 position) {
+  float light_dir = normalize(light_loc);
+  float total_density = 0.0;
+  float depth = 0.0f;
+
+  for (int step = 0; step < max_light_step; step++) {
+      float3 pos = position + depth * light_dir;
+
+      float light_sample = cloud_scene(pos);
+      total_density += light_sample;
+
+      depth += light_step_size;
+  }
+
+  float transmittance = BeersLaw(total_density, cloud_density);
+  return transmittance;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -270,12 +297,17 @@ float signed_distance_field_sphere(float3 pos){
 
 float4 Trace(Ray ray, float offset){
 
-    float4 res = float4(0.0f,0.0f,0.0f, 0.0f);
     float depth = 0.0f;
 
     float dlambda = change_size;
     
-    int fog_ratio = (int)(num_steps / fog_step_size);
+    int fog_ratio = (int)(num_steps / fog_no_steps);
+
+    float total_transmittance = 1.0f;
+    float light_intensity = 0.0f;
+
+    float phase = HenyeyGreenstein(anisotropic_scatter_factor, dot(ray.dir, normalize(light_loc)));
+
 
     for(int i = 0; i < num_steps; i++){
 
@@ -289,27 +321,17 @@ float4 Trace(Ray ray, float offset){
         if(i % fog_ratio == 0){
             float density = cloud_scene(pos);
             if (density > 0.0f){
-                float diffuse = clamp((cloud_scene(pos+0.001f*light_loc)-density)/0.001f,0.0,1.0) ;
+                float lightTransmittance = lightmarch(pos);
+                float luminance = 0.02 + density *phase;
 
-                float3 lin = float3(0.60,0.60,0.75) * 1.1 + 0.8 * float3(1.0,0.6,0.3) * diffuse;
-                float4 color = float4(exponential_interpolation(colour_min.rgb, colour_max.rgb, density), density );
-                color.rgb *= lin;
-
-                color.rgb *= color.a;
-                res += color * (1.0 - res.a);
-
-                if (res.a < 0.0001 || res.a > 0.9999){
-                    break;
+                total_transmittance *= lightTransmittance;
+                light_intensity += total_transmittance * luminance;
             }
         }
 
-        }
-
-        
-
-
     }
-    return res;
+
+    return light_intensity;
 }
 
 [numthreads(8,8,1)]

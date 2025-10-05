@@ -16,6 +16,10 @@ public class Fog : MonoBehaviour
     public float step_size;
     public int num_steps;
     public float noise_factor;
+    public float distance_falloff_factor;
+
+    public Vector2 ring_size;
+    public Vector3 disk_normal;
 
     [Header("Shader")]
     public ComputeShader shader;
@@ -105,16 +109,20 @@ public class Fog : MonoBehaviour
     }
 
     private void InitParameters() {
+
+        shader.SetVector("ring_size",ring_size);
+        shader.SetVector("disk_normal", Vector3.Normalize(disk_normal));
+
         shader.SetInt("num_steps", num_steps);
         shader.SetFloat("step_size", step_size);
         shader.SetFloat("cloud_density", density);
+        shader.SetFloat("distance_falloff_factor", distance_falloff_factor);
 
         shader.SetVector("light_loc", light_loc);
         shader.SetFloat("max_light_step", light_step);
         shader.SetFloat("light_step_size", light_step_size);
         shader.SetFloat("anisotropic_scatter_factor",anisotropic_scatter_factor);
 
-        shader.SetFloat("noise_factor",noise_factor);
         shader.SetVector("colour_min", colour_min);
         shader.SetVector("colour_max", colour_max);
         shader.SetFloat("interpolation_factor", interpolation_factor);

@@ -17,14 +17,15 @@ float time;
 int num_steps;
 float step_size;
 float cloud_density;
+float distance_falloff_factor;
+
+float3 disk_normal;
+float2 ring_size;
 
 float3 light_loc;
 float max_light_step;
 float light_step_size;
 float anisotropic_scatter_factor;
-
-
-float noise_factor;
 
 float4 colour_max;
 float4 colour_min;
@@ -112,15 +113,21 @@ float signed_distance_field_sphere(float3 pos){
     return length(pos - float3(0,0,0)) - 5.0f;
 }
 
+float signed_distance_cloud(float3 pos){
+
+    float2 d = abs(float2(length(pos.xz),pos.y)) - ring_size;
+    return min(max(d.x,d.y),0.0) + length(max(d,0.0));
+}
+
 float scene(float3 pos){
-    float distance = signed_distance_field_sphere(pos);
+    float distance = signed_distance_cloud(pos);
     float f = fbm(pos);
 
     return -distance + f;
 }
 
 // Ray march from cloud to light source
-float lightmarch(float3 position) {
+float lightmarch(float3 position, float dist) {
   float light_dir = normalize(light_loc);
   float total_density = 0.0;
   float depth = 0.0f;
@@ -140,8 +147,6 @@ float lightmarch(float3 position) {
 
 
 float4 Trace(Ray ray, float offset){
-
-    float4 res = float4(0.0f,0.0f,0.0f, 0.0f);
     float total_transmittance = 1.0f;
     float light_intensity = 0.0f;
 
@@ -159,7 +164,7 @@ float4 Trace(Ray ray, float offset){
         
 
         if (density > 0.0f){
-            float lightTransmittance = lightmarch(pos);
+            float lightTransmittance = lightmarch(pos, density);
             float luminance = 0.02 + density *phase;
 
             total_transmittance *= lightTransmittance;
@@ -170,6 +175,10 @@ float4 Trace(Ray ray, float offset){
         depth += step_size * offset;
 
     }
+
+    // if (light_intensity > 0) {
+    //     return float4(exponential_interpolation(colour_max, colour_min, light_intensity), light_intensity );
+    // }
     return light_intensity;
 }
 

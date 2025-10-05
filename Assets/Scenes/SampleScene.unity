@@ -270,18 +270,24 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RayMarchHelper
   mass: 2
-  ring_size: {x: 3, y: 10}
+  ring_size: {x: 1, y: 4}
+  disk_normal: {x: 0, y: 1, z: 0.67}
+  speed_of_light: 1
+  G: 1
   num_steps: 1000
   change_size: 0.1
-  disk_normal: {x: 0, y: 1, z: 0}
   shader: {fileID: 7200000, guid: 0b7d43c7b24c5e548beb5561aa3ed2e7, type: 3}
   accumulateShader: {fileID: 4800000, guid: 17da9b98ea8e8f643bbd102d806d825f, type: 3}
-  light_loc: {x: 0, y: 0, z: 0}
-  fog_step_size: 100
-  interpolation_factor: 10
+  blueNoise: {fileID: 2800000, guid: 228ff113a74ce1049ad7a6e9bba484b4, type: 3}
+  fog_no_steps: 10
+  cloud_density: 0.06
+  light_loc: {x: 0, y: 0.1, z: 0}
+  light_step: 8
+  light_step_size: 0.3
+  anisotropic_scatter_factor: 0.5
   colour_max: {r: 0, g: 0.16482663, b: 1, a: 0}
   colour_min: {r: 1, g: 0, b: 0, a: 0}
-  blueNoise: {fileID: 2800000, guid: 228ff113a74ce1049ad7a6e9bba484b4, type: 3}
+  interpolation_factor: 2
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
