@@ -10,23 +10,25 @@ sampler2D  BlueNoise;
 // RWStructuredBuffer<float2> gradients;
 
 
-int num_steps;
 float3 _CamPlane;
 float4x4 _CamToWorldMatrix;
 float time;
-float light_intensity;
 
-float cloud_density;
-float3 light_loc;
+int num_steps;
 float step_size;
-float interpolation_factor;
+float cloud_density;
 
-float exp_factor;
-int shadow_steps;
+float3 light_loc;
+float max_light_step;
+float light_step_size;
+float anisotropic_scatter_factor;
+
+
 float noise_factor;
 
 float4 colour_max;
 float4 colour_min;
+float interpolation_factor;
 
 struct Ray {
     float3 dir;
@@ -85,8 +87,7 @@ float fbm( float3 p )
     return f;
 }
 
-
-
+// Colour interpolation
 float3 exponential_interpolation(float3 col_min, float3 col_max, float value){
 
     value = saturate(value);
@@ -94,7 +95,16 @@ float3 exponential_interpolation(float3 col_min, float3 col_max, float value){
     float factor = (1.0 - exp(-interpolation_factor * value)) / (denom);  
 
     return lerp(col_min, col_max, factor);
+}
 
+// Light phase function to model Anisotropic 
+float HenyeyGreenstein(float g, float mu) {
+  float gg = g * g;
+	return (1.0 / (4.0 * 3.14))  * ((1.0 - gg) / pow(1.0 + gg - 2.0 * g * mu, 1.5));
+}
+
+float BeersLaw (float dist, float absorption) {
+  return exp(-dist * absorption);
 }
 
 
@@ -109,13 +119,35 @@ float scene(float3 pos){
     return -distance + f;
 }
 
+// Ray march from cloud to light source
+float lightmarch(float3 position) {
+  float light_dir = normalize(light_loc);
+  float total_density = 0.0;
+  float depth = 0.0f;
+
+  for (int step = 0; step < max_light_step; step++) {
+      float3 pos = position + depth * light_dir;
+
+      float light_sample = scene(pos);
+      total_density += light_sample;
+
+      depth += light_step_size;
+  }
+
+  float transmittance = BeersLaw(total_density, cloud_density);
+  return transmittance;
+}
+
 
 float4 Trace(Ray ray, float offset){
 
     float4 res = float4(0.0f,0.0f,0.0f, 0.0f);
-    float transmittance = 1;
+    float total_transmittance = 1.0f;
+    float light_intensity = 0.0f;
 
     float depth = 0.0f;
+
+    float phase = HenyeyGreenstein(anisotropic_scatter_factor, dot(ray.dir, normalize(light_loc)));
 
 
     for(int i = 0; i < num_steps; i++){
@@ -127,25 +159,18 @@ float4 Trace(Ray ray, float offset){
         
 
         if (density > 0.0f){
-            float diffuse = clamp((scene(pos+0.001f*light_loc)-density)/0.001f,0.0,1.0) ;
+            float lightTransmittance = lightmarch(pos);
+            float luminance = 0.02 + density *phase;
 
-            float3 lin = float3(0.60,0.60,0.75) * 1.1 + 0.8 * float3(1.0,0.6,0.3) * diffuse;
-            float4 color = float4(exponential_interpolation(colour_min.rgb, colour_max.rgb, density), density );
-            color.rgb *= lin;
-
-            color.rgb *= color.a;
-            res += color * (1.0 - res.a);
-
-            if (res.a < 0.0001 || res.a > 0.9999){
-                break;
-            }
+            total_transmittance *= lightTransmittance;
+            light_intensity += total_transmittance * luminance;
         }
 
 
         depth += step_size * offset;
 
     }
-    return res;
+    return light_intensity;
 }
 
 

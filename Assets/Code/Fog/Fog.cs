@@ -10,25 +10,32 @@ using UnityEditor;
 [ExecuteAlways]
 public class Fog : MonoBehaviour
 {
+    [Header("Fog Settings")]
     [Range(0, 1)]
     public float density;
     public float step_size;
     public int num_steps;
-    public int shadow_steps;
-    public float light_intensity;
-    public float exp_factor;
     public float noise_factor;
-    public Vector3 light_loc;
-    RenderTexture outputTexture;
-    public ComputeShader shader;
 
+    [Header("Shader")]
+    public ComputeShader shader;
+    public Texture2D blueNoise;
+
+    [Header("Lighting Settings")]
+    public Vector3 light_loc;
+    public int light_step;
+    public float light_step_size;
+    [Range(0, 1)]
+    public float anisotropic_scatter_factor;
+
+    [Header("Colour Settings")]
     public float interpolation_factor;
     public Color colour_max;
     public Color colour_min;
 
-    public Texture2D blueNoise;
 
     private float time = 0.0f;
+    RenderTexture outputTexture;
 
     Camera cam;
 
@@ -101,10 +108,12 @@ public class Fog : MonoBehaviour
         shader.SetInt("num_steps", num_steps);
         shader.SetFloat("step_size", step_size);
         shader.SetFloat("cloud_density", density);
+
         shader.SetVector("light_loc", light_loc);
-        shader.SetFloat("light_intensity", light_intensity);
-        shader.SetFloat("exp_factor", exp_factor);
-        shader.SetInt("shadow_steps",shadow_steps);
+        shader.SetFloat("max_light_step", light_step);
+        shader.SetFloat("light_step_size", light_step_size);
+        shader.SetFloat("anisotropic_scatter_factor",anisotropic_scatter_factor);
+
         shader.SetFloat("noise_factor",noise_factor);
         shader.SetVector("colour_min", colour_min);
         shader.SetVector("colour_max", colour_max);
